@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SelectTranslate.App/SelectTranslate.App.csproj" />
+    <Project Path="src/SelectTranslate.Core/SelectTranslate.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SelectTranslate.Core.Tests/SelectTranslate.Core.Tests.csproj" />
+  </Folder>
+</Solution>

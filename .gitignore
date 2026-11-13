@@ -1,0 +1,22 @@
+# 构建产物
+bin/
+obj/
+artifacts/
+publish/
+.smoke/
+
+# 用户与工具
+.vs/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+# 运行时数据（便携模式可能落在仓库内）
+data/
+logs/
+*.log
+
+# 系统
+Thumbs.db
+desktop.ini
