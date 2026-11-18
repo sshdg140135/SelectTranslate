@@ -8,7 +8,7 @@ SelectTranslate（划词译）：Windows 11 桌面常驻工具。在任意应用
 
 ## 当前阶段
 
-**M2 主体已完成**：取词（UIA + 剪贴板兜底）、语言判定短路、OpenAI 兼容翻译客户端（非流式）、错误映射、卡片原文/译文/复制、最小配置页；59 个单测通过。下一步：SSE 流式、超时重试细节、Esc 关闭（M3）。
+**v0.9.0 可分发预览版已打包**：取词、语言短路、翻译（非流式）、错误映射、卡片交互（图钉/拖动/Esc）、键盘热键、托盘与提权重启、设置最小页；90 个单测通过。下一步（v1.0）：SSE 流式、剪贴板全格式还原、设置五页/黑名单/明文警告、干净机验收。
 
 ## 文档地图（按顺序读）
 
@@ -32,11 +32,12 @@ SelectTranslate（划词译）：Windows 11 桌面常驻工具。在任意应用
 - 构建：`dotnet build SelectTranslate.slnx`
 - 测试：`dotnet run --project tests/SelectTranslate.Core.Tests --no-build`
 - 发布：`dotnet publish src/SelectTranslate.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true`（完整参数见 `docs/ops/release.md`）
-- 本机运行（必须）：把 `src/SelectTranslate.App/bin/Debug/net10.0-windows` 复制到 `%LOCALAPPDATA%\SelectTranslate\app` 后双击运行（桌面已有快捷方式）。
+- 本机调试：`powershell -File tools/deploy.ps1`（构建 → 部署到 `%LOCALAPPDATA%\SelectTranslate\app` → 刷新桌面快捷方式）
+- 发布打包：`powershell -File tools/publish.ps1`（产物在 `dist/`，含 SHA256）
 
 注意：
 
-- **工作区目录带低完整性标签**，其下构建出的 exe 启动后进程也是低完整性：写不了用户目录、托盘图标会被 UIPI 拦掉、收不到其他程序的中键。所以必须复制到普通目录运行；程序检测到低完整性会直接弹窗说明。
+- 若 exe 落在低完整性/受限目录（例如某些沙箱工作区），启动后进程会被降权：写不了用户目录、托盘图标会被 UIPI 拦掉、收不到中键。用 `tools/deploy.ps1` 部署到 `%LOCALAPPDATA%`，或使用发布包；程序检测到低完整性会弹窗说明。
 - 诊断取词：`SelectTranslate.exe --probe-selection out.txt` 会把当前前台窗口的选区写到文件（排查 UIA/剪贴板取词用）。
 - 受限环境排查界面：`SelectTranslate.exe -portable --allow-low-integrity` 跳过低完整性守卫（只为验证 XAML/DI 能否构造，日常不要用）。
 - 卡片预览：SelectTranslate.exe --render-card card.png 把卡片渲染成 PNG（验证配色与排版，不弹窗）。

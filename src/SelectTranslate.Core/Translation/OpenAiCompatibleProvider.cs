@@ -9,7 +9,10 @@ namespace SelectTranslate.Core.Translation;
 /// OpenAI 兼容的 /chat/completions 实现。M2 先用非流式（stream=false）打通链路，
 /// 流式解析在 M3 接入（design §5.3）。
 /// </summary>
-public sealed class OpenAiCompatibleProvider(HttpClient httpClient, Func<ApiSettings> settingsFactory)
+public sealed class OpenAiCompatibleProvider(
+    HttpClient httpClient,
+    Func<ApiSettings> settingsFactory,
+    Action<string>? debugLog = null)
     : ITranslationProvider
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -41,6 +44,8 @@ public sealed class OpenAiCompatibleProvider(HttpClient httpClient, Func<ApiSett
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(settings.TimeoutMs);
 
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
         try
         {
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
@@ -63,7 +68,13 @@ public sealed class OpenAiCompatibleProvider(HttpClient httpClient, Func<ApiSett
                 HttpCompletionOption.ResponseHeadersRead,
                 timeoutCts.Token);
 
+            var ttfb = stopwatch.ElapsedMilliseconds;
+
             var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+
+            debugLog?.Invoke(
+                $"LLM 响应：status={(int)response.StatusCode}，ttfb={ttfb}ms，total={stopwatch.ElapsedMilliseconds}ms"
+                + DescribeUsage(body));
 
             if (!response.IsSuccessStatusCode)
             {
@@ -128,7 +139,104 @@ public sealed class OpenAiCompatibleProvider(HttpClient httpClient, Func<ApiSett
             payload["max_tokens"] = settings.MaxTokens;
         }
 
+        ApplyThinking(payload, settings);
+
+        // 附加参数最后合并：用户手填的内容永远覆盖自动推断。
+        ApplyExtraBody(payload, settings.ExtraBodyJson);
+
         return JsonSerializer.Serialize(payload, JsonOptions);
+    }
+
+    /// <summary>按模型名前缀写入思考开关字段；未知模型不写。</summary>
+    private static void ApplyThinking(Dictionary<string, object?> payload, ApiSettings settings)
+    {
+        if (settings.ThinkingMode is not ("on" or "off"))
+        {
+            return;
+        }
+
+        var plan = ThinkingStrategies.Detect(settings.Model);
+        var patch = ThinkingStrategies.BuildPatch(plan, settings.ThinkingMode == "on");
+        if (patch is null)
+        {
+            return;
+        }
+
+        foreach (var pair in patch)
+        {
+            payload[pair.Key] = pair.Value;
+        }
+    }
+
+    /// <summary>把"附加请求参数"里的顶层属性合并进请求体（可覆盖 stream/model 等）。</summary>
+    private static void ApplyExtraBody(Dictionary<string, object?> payload, string? extraBodyJson)
+    {
+        if (string.IsNullOrWhiteSpace(extraBodyJson))
+        {
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(extraBodyJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new TranslationException(
+                    TranslationErrorKind.ConfigMissing,
+                    "附加请求参数必须是 JSON 对象，例如 {\"thinking\":{\"type\":\"disabled\"}}");
+            }
+
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                payload[property.Name] = property.Value.Clone();
+            }
+        }
+        catch (JsonException ex)
+        {
+            throw new TranslationException(
+                TranslationErrorKind.ConfigMissing,
+                "附加请求参数不是合法 JSON，请到设置里检查。",
+                inner: ex);
+        }
+    }
+
+    /// <summary>从响应里取 token 用量，日志只写数字，不写内容。</summary>
+    private static string DescribeUsage(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (!document.RootElement.TryGetProperty("usage", out var usage)
+                || usage.ValueKind != JsonValueKind.Object)
+            {
+                return string.Empty;
+            }
+
+            var parts = new List<string>();
+            if (usage.TryGetProperty("prompt_tokens", out var prompt) && prompt.TryGetInt32(out var p))
+            {
+                parts.Add($"prompt={p}");
+            }
+
+            if (usage.TryGetProperty("completion_tokens", out var completion) && completion.TryGetInt32(out var c))
+            {
+                parts.Add($"completion={c}");
+            }
+
+            if (usage.TryGetProperty("completion_tokens_details", out var details)
+                && details.ValueKind == JsonValueKind.Object
+                && details.TryGetProperty("reasoning_tokens", out var reasoning)
+                && reasoning.TryGetInt32(out var r))
+            {
+                parts.Add($"reasoning={r}");
+            }
+
+            return parts.Count == 0 ? string.Empty : "，" + string.Join("，", parts);
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
     }
 
     /// <summary>解析 choices[0].message.content；兼容少数返回 choices[0].text 的实现。</summary>

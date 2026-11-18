@@ -221,6 +221,16 @@ public interface ITranslationProvider
 
 便携模式（`-portable`）基目录改为 `<exe>\data\`。
 
+服务商档案（schemaVersion 2）：
+
+- `providers[]`：每个档案含 `id`、`name`、`providerType`、`baseUrl`、`apiKeyProtected`、`model` 等；Key 仍按档案各自 DPAPI 加密。
+- `activeProviderId`：当前使用的档案；切换后下一次翻译即生效（请求时实时读取当前档案）。
+- 设置页的「深度思考」下拉（默认/是/否）存的是 `thinkingMode`，请求时由 `ThinkingStrategies` 按**模型名前缀**生成对应字段（doubao/deepseek/glm/kimi → `thinking.type`；qwen → `enable_thinking`；gpt/o1/o3/o4 → `reasoning_effort`，只能降到 minimal；未识别模型不写任何字段，UI 会提示）。
+- 合并顺序：思考补丁先写入请求体，`extraBodyJson` 最后覆盖，用户手填永远是最终决定。
+- 每个档案可用 `extraBodyJson`（UI 里叫"附加请求参数"）向 `/chat/completions` 请求体顶层合并任意字段，用于服务商特有能力（例如火山方舟关闭深度思考 `{"thinking":{"type":"disabled"}}`）。非法 JSON 在保存时拦截；请求体合并失败按 ConfigMissing 报错。
+- 调用诊断：Debug 级别会记录 `ttfb` / `total` 耗时与 `usage` 里的 prompt/completion/reasoning token 数（不记录任何文本）。
+- 迁移：加载 v1 配置时，把旧的单个 `api` 节点搬进 `providers[0]` 并设为当前，随后 `api` 节点不再写出。
+
 基目录按以下顺序选择，第一个"能创建且能写入"的生效（写一个探针文件验证）：
 
 1. `%APPDATA%\SelectTranslate`（普通模式）或 `<exe>\data`（便携模式）

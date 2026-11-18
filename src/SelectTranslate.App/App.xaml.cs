@@ -177,7 +177,10 @@ public partial class App : Application
         _httpClient = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
 
         var registry = new ProviderRegistry();
-        registry.Register(new OpenAiCompatibleProvider(_httpClient, BuildApiSettings));
+        registry.Register(new OpenAiCompatibleProvider(
+            _httpClient,
+            BuildApiSettings,
+            message => _log?.Debug(message)));
         _translation = new TranslationService(registry, () => _config!.Current);
 
         var services = new ServiceCollection();
@@ -457,7 +460,9 @@ public partial class App : Application
             api.SystemPrompt,
             api.ExtraHeaders,
             api.Stream,
-            api.MaxTokens);
+            api.MaxTokens,
+            api.ExtraBodyJson,
+            api.ThinkingMode);
     }
 
     private async Task StartTranslationAsync(string text, bool bypassLanguageCheck, int anchorX, int anchorY)
@@ -504,7 +509,7 @@ public partial class App : Application
             _popup.ShowTranslation(outcome.Text, outcome.Truncated, outcome.Echoed, outcome.Elapsed);
             _log?.Info(
                 $"翻译完成 {outcome.Text.Length} 字，{outcome.Elapsed.TotalMilliseconds:0} ms"
-                + $"，model={outcome.Model}，target={_config.Current.Target.Lang}"
+                + $"，model={outcome.Model}，provider={_config.Current.ActiveProvider.Name}，target={_config.Current.Target.Lang}"
                 + $"，检测={outcome.DetectedLanguage}"
                 + (outcome.Truncated ? "，已截断" : string.Empty)
                 + (outcome.Echoed ? "，原样返回" : string.Empty));

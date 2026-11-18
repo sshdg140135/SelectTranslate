@@ -33,7 +33,7 @@ public sealed class ConfigServiceTests : IDisposable
         service.Load();
 
         Assert.Null(service.LastError);
-        Assert.Equal(1, service.Current.SchemaVersion);
+        Assert.Equal(2, service.Current.SchemaVersion);
         Assert.Equal("openai-compatible", service.Current.Api.ProviderType);
         Assert.Equal("https://api.deepseek.com/v1", service.Current.Api.BaseUrl);
         Assert.Equal("deepseek-chat", service.Current.Api.Model);
@@ -92,7 +92,7 @@ public sealed class ConfigServiceTests : IDisposable
         var config = new AppConfig
         {
             Ui = new UiConfig { Width = width },
-            Api = new ApiConfig { TimeoutMs = timeoutMs, Temperature = temperature },
+            Providers = [new ApiConfig { TimeoutMs = timeoutMs, Temperature = temperature }],
             Behavior = new BehaviorConfig { MaxChars = maxChars },
         };
 

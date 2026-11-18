@@ -10,7 +10,7 @@
     <AssemblyName>SelectTranslate</AssemblyName>
     <RootNamespace>SelectTranslate.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.0</Version>
+    <Version>0.9.4</Version>
     <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
     <!-- DPI 感知走 app.manifest（WPF 需要 PerMonitorV2 在进程启动前生效），关闭 WinForms 的分析器提示。 -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>

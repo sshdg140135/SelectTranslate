@@ -20,3 +20,6 @@ logs/
 # 系统
 Thumbs.db
 desktop.ini
+
+dist/
+

@@ -2,73 +2,76 @@
 
 | 项目 | 内容 |
 |---|---|
-| 版本 | v1.0 |
-| 适用范围 | 便携 zip（v1.0）；安装器/自动更新/签名见 v2.0 |
+| 版本 | v0.9.0（首个可分发预览版） |
+| 适用范围 | 便携 zip；安装器 / 自动更新 / 签名暂不做 |
 | 相关 | `design.md` §8、`PRD.md` FR-12 |
 
-## 1. 构建
+## 1. 一键打包
 
 ```powershell
-# 清理
-dotnet clean
-
-# 发布（单文件、自包含、压缩）
-dotnet publish src/SelectTranslate.App -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true `
-  -p:IncludeNativeLibrariesForSelfExtract=true `
-  -p:EnableCompressionInSingleFile=true `
-  -o artifacts/publish
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\publish.ps1
+# 冷启动更快（体积 +25MB 左右）：
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\publish.ps1 -ReadyToRun
 ```
 
-可选（改善冷启动，体积 +25–35%）：
+脚本会：
 
-```powershell
--p:PublishReadyToRun=true
+1. 读取 `SelectTranslate.App.csproj` 的版本号；
+2. `dotnet publish` 自包含单文件（`PublishSingleFile` + `IncludeNativeLibrariesForSelfExtract` + 压缩）；
+3. 把 `README.md` 放进包内，删除 `.pdb`；
+4. 生成 `dist/SelectTranslate-v<版本>-win-x64.zip` 与同名 `.sha256`。
+
+当前实测：exe ≈ 66.7 MB，zip ≈ 61.2 MB。
+
+## 2. 产物
+
+```
+dist/
+├── SelectTranslate-v0.9.0-win-x64.zip
+└── SelectTranslate-v0.9.0-win-x64.zip.sha256
 ```
 
-## 2. 产物与命名
+zip 内结构：
 
 ```
-SelectTranslate-v1.0.0-win-x64.zip
+SelectTranslate-v0.9.0-win-x64/
 ├── SelectTranslate.exe
-├── README.txt
-├── LICENSE
-└── SHA256.txt
+└── README.md
 ```
 
-- 版本号遵循 `MAJOR.MINOR.PATCH`；`AssemblyInfo` 与 zip 名保持一致。
-- `SHA256.txt` 内容：`<hash>  SelectTranslate.exe`。
+## 3. 发布前自检（本机）
 
-## 3. 发布检查单
+```powershell
+# 解压到临时目录
+Expand-Archive dist\SelectTranslate-v0.9.0-win-x64.zip -DestinationPath artifacts\release-test -Force
 
-- [ ] `dotnet test` 全绿
-- [ ] AC 清单在干净 Win11 虚拟机上逐条通过（至少 AC-01、AC-06、AC-12、AC-18、AC-26、AC-31）
-- [ ] 首次向导在无配置环境下完整走通
-- [ ] 卸载自启项后不再自启
-- [ ] 日志中无原文、译文、Key
-- [ ] exe 属性中的版本号与文件名一致
-- [ ] README.txt 包含 3 步上手与 SmartScreen 说明
-- [ ] 体积与启动时间在指标内（≤100MB、≤2s）
-- [ ] 生成 SHA256 并写入发布说明
+# 冒烟：启动 → 托盘/钩子就绪 → 自动退出
+$exe = "artifacts\release-test\SelectTranslate-v0.9.0-win-x64\SelectTranslate.exe"
+Start-Process $exe -ArgumentList '-portable','--self-test'
+Get-Content "artifacts\release-test\SelectTranslate-v0.9.0-win-x64\data\logs\*.log" -Tail 5
+```
 
-## 4. 分发说明（给接收者）
+通过标准：日志出现 `启动 … 0.9.0`、`托盘已就绪`、`键盘钩子已安装`、`鼠标钩子已安装`、`自检完成`，且没有 `startup-error.log`。
 
-> 这个程序不需要安装。解压后双击 `SelectTranslate.exe` 即可。
-> 如果 Windows 提示"已保护你的电脑"，点"更多信息"→"仍要运行"。
-> 首次运行会引导你填写翻译服务的地址和 Key，填完点"测试连接"。
+## 4. 分发
 
-## 5. 便携模式
+1. 把 zip 与 `.sha256` 一起发给对方；
+2. 对方解压后先校验（可选）：`certutil -hashfile <zip> SHA256`，与 `.sha256` 内容比对；
+3. 双击 `SelectTranslate.exe`；SmartScreen 提示时选"更多信息 → 仍要运行"；
+4. 托盘右键 → 打开设置 → 填接口地址、API Key、模型 → 测试连接 → 保存。
 
-- 启动参数加 `-portable`，配置与日志写到 `<exe>\data\`。
-- 便携模式默认不写开机自启，避免 U 盘盘符变化导致失效。
-- 从便携模式切回普通模式：删除 `data\` 目录即可。
+## 5. 干净机器验收清单（v1.0 前必须补）
 
-## 6. 回滚
+- [ ] 干净 Win11 x64 虚拟机：解压即运行，无 .NET 依赖
+- [ ] 首次启动无崩溃、托盘可见、热键生效
+- [ ] 配置写入 `%APPDATA%\SelectTranslate\config.json`，Key 为 DPAPI 密文
+- [ ] Chrome / Edge / Word / VS Code / PDF 阅读器各取词一次
+- [ ] 双屏 + 混合 DPI 定位
+- [ ] 失败矩阵：错误 Key、断网、429、超时
+- [ ] 卸载：退出后删除目录 + `%APPDATA%\SelectTranslate` 即干净
 
-- 保留上一版本 zip；出现严重问题时让用户解压旧版覆盖。
-- 配置向后兼容：`schemaVersion` 升级时保留旧文件备份（`config.bad-{ts}.json`）。
+## 6. 版本策略
 
-## 7. 后续（v2.0）
-
-- 安装器（MSIX 或 Inno Setup）、自动更新、代码签名、ARM64 产物。
-- 签名后 SmartScreen 提示消失，README 中的"仍要运行"说明可移除。
+- 预览：`0.x.y`，接口与配置可能变化；
+- 正式：`1.0.0` 起，配置带 `schemaVersion` 做迁移；
+- 每次发版更新 `CHANGELOG.md` 与 `SelectTranslate.App.csproj` 的 `<Version>`。

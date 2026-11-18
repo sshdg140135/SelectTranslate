@@ -9,17 +9,23 @@ public sealed class OpenAiCompatibleProviderTests
 {
     private static string? _lastBody;
 
-    private static ApiSettings Settings(string? key = "sk-test") => new(
+    private static ApiSettings Settings(
+        string? key = "sk-test",
+        string extraBody = "",
+        string model = "test-model",
+        string thinkingMode = "default") => new(
         BaseUrl: "https://api.example.com/v1",
         ApiKey: key,
-        Model: "test-model",
+        Model: model,
         Temperature: 0.2,
         TimeoutMs: 5_000,
         ConnectTimeoutMs: 3_000,
         SystemPrompt: "translate",
         ExtraHeaders: new Dictionary<string, string>(),
         Stream: false,
-        MaxTokens: null);
+        MaxTokens: null,
+        ExtraBodyJson: extraBody,
+        ThinkingMode: thinkingMode);
 
     private static HttpResponseMessage Json(HttpStatusCode status, string body)
         => new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
@@ -174,6 +180,106 @@ public sealed class OpenAiCompatibleProviderTests
         Assert.Contains("只输出译文", system);
         Assert.Equal("hello", user);
         Assert.Equal("test-model", document.RootElement.GetProperty("model").GetString());
+    }
+
+    [Fact]
+    public async Task TranslateAsync_MergesExtraBodyIntoPayload()
+    {
+        var provider = Create(
+            HttpStatusCode.OK,
+            """{"choices":[{"message":{"content":"你好"}}]}""",
+            Settings(extraBody: """{"thinking":{"type":"disabled"},"do_sample":false}"""),
+            out _);
+
+        await provider.TranslateAsync(Request(), null, CancellationToken.None);
+
+        using var document = System.Text.Json.JsonDocument.Parse(_lastBody!);
+        var thinking = document.RootElement.GetProperty("thinking");
+        Assert.Equal("disabled", thinking.GetProperty("type").GetString());
+        Assert.False(document.RootElement.GetProperty("do_sample").GetBoolean());
+    }
+
+    [Fact]
+    public async Task TranslateAsync_ThrowsConfigMissing_OnInvalidExtraBody()
+    {
+        var provider = Create(
+            HttpStatusCode.OK,
+            """{"choices":[{"message":{"content":"你好"}}]}""",
+            Settings(extraBody: "{not-json"),
+            out _);
+
+        var error = await Assert.ThrowsAsync<TranslationException>(
+            () => provider.TranslateAsync(Request(), null, CancellationToken.None));
+
+        Assert.Equal(TranslationErrorKind.ConfigMissing, error.Kind);
+    }
+
+    [Theory]
+    [InlineData("doubao-seed-2-1-lite", "thinking.type", "disabled")]
+    [InlineData("qwen3-max", "enable_thinking", "false")]
+    [InlineData("gpt-5", "reasoning_effort", "minimal")]
+    public async Task TranslateAsync_WritesProviderSpecificThinkingField_WhenModeIsOff(
+        string model,
+        string propertyPath,
+        string expected)
+    {
+        var provider = Create(
+            HttpStatusCode.OK,
+            """{"choices":[{"message":{"content":"你好"}}]}""",
+            Settings(model: model, thinkingMode: "off"),
+            out _);
+
+        await provider.TranslateAsync(Request(), null, CancellationToken.None);
+
+        using var document = System.Text.Json.JsonDocument.Parse(_lastBody!);
+        var element = document.RootElement;
+        foreach (var part in propertyPath.Split('.'))
+        {
+            element = element.GetProperty(part);
+        }
+
+        var actual = element.ValueKind == System.Text.Json.JsonValueKind.String
+            ? element.GetString()
+            : element.GetRawText();
+
+        Assert.Equal(expected, actual);
+        Assert.False(document.RootElement.GetProperty("stream").GetBoolean());
+    }
+
+    [Fact]
+    public async Task TranslateAsync_WritesNothing_ForUnknownModel()
+    {
+        var provider = Create(
+            HttpStatusCode.OK,
+            """{"choices":[{"message":{"content":"你好"}}]}""",
+            Settings(model: "llama-3.1", thinkingMode: "off"),
+            out _);
+
+        await provider.TranslateAsync(Request(), null, CancellationToken.None);
+
+        Assert.DoesNotContain("thinking", _lastBody);
+        Assert.DoesNotContain("enable_thinking", _lastBody);
+        Assert.DoesNotContain("reasoning_effort", _lastBody);
+    }
+
+    [Fact]
+    public async Task TranslateAsync_ExtraBodyOverridesAutoThinking()
+    {
+        var provider = Create(
+            HttpStatusCode.OK,
+            """{"choices":[{"message":{"content":"你好"}}]}""",
+            Settings(
+                model: "doubao-seed-2-1-lite",
+                thinkingMode: "off",
+                extraBody: """{"thinking":{"type":"enabled"}}"""),
+            out _);
+
+        await provider.TranslateAsync(Request(), null, CancellationToken.None);
+
+        using var document = System.Text.Json.JsonDocument.Parse(_lastBody!);
+        Assert.Equal(
+            "enabled",
+            document.RootElement.GetProperty("thinking").GetProperty("type").GetString());
     }
 
     [Theory]

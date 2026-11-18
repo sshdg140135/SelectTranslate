@@ -2,8 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="SelectTranslate 设置"
-        Width="560"
-        Height="620"
+        Width="580"
+        Height="760"
         WindowStartupLocation="CenterScreen"
         FontFamily="Microsoft YaHei UI"
         Background="#F7F7F8">
@@ -19,7 +19,7 @@
                        FontSize="22"
                        FontWeight="SemiBold"
                        Foreground="#1B1B1F" />
-            <TextBlock Text="最小配置页：接口、Key、模型、目标语言。完整五页设置与首次向导在 M3 补齐。"
+            <TextBlock Text="可配置多个服务商，选中后点「设为当前」即时切换；完整的五页设置与首次向导在后续版本补齐。"
                        FontSize="12"
                        Foreground="#6F6F77"
                        Margin="0,6,0,0"
@@ -34,30 +34,120 @@
                         CornerRadius="8"
                         Padding="16">
                     <StackPanel>
-                        <TextBlock Text="翻译服务" FontWeight="SemiBold" Foreground="#1B1B1F" />
+                        <TextBlock Text="翻译服务商" FontWeight="SemiBold" Foreground="#1B1B1F" />
+                        <TextBlock Text="列表里带 ● 的是当前使用的服务商；切换对下一次翻译立即生效。"
+                                   FontSize="12"
+                                   Foreground="#4A4A52"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap" />
+
+                        <ListBox x:Name="ProviderList"
+                                 Height="92"
+                                 Margin="0,10,0,0"
+                                 DisplayMemberPath="Text"
+                                 SelectionChanged="OnProviderSelectionChanged" />
+
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="新增"
+                                    Width="72"
+                                    Height="28"
+                                    Margin="0,0,8,0"
+                                    Click="OnAddProviderClick" />
+                            <Button Content="删除"
+                                    Width="72"
+                                    Height="28"
+                                    Margin="0,0,8,0"
+                                    Click="OnDeleteProviderClick" />
+                            <Button Content="设为当前"
+                                    Width="88"
+                                    Height="28"
+                                    Click="OnSetActiveClick" />
+                        </StackPanel>
+
+                        <TextBlock x:Name="ActiveProviderText"
+                                   FontSize="12"
+                                   Foreground="#2F6F3E"
+                                   Margin="0,8,0,0" />
+
+                        <TextBlock Text="名称"
+                                   FontSize="12"
+                                   Foreground="#4A4A52"
+                                   Margin="0,12,0,4" />
+                        <TextBox x:Name="NameBox" Height="30" Padding="6,4" VerticalContentAlignment="Center" />
+
+                        <TextBlock Text="服务商类型"
+                                   FontSize="12"
+                                   Foreground="#4A4A52"
+                                   Margin="0,10,0,4" />
+                        <ComboBox x:Name="ProviderTypeBox" Height="30" VerticalContentAlignment="Center">
+                            <ComboBoxItem Content="OpenAI 兼容接口" Tag="openai-compatible" />
+                            <ComboBoxItem Content="Google 翻译（即将支持）" Tag="google" IsEnabled="False" />
+                            <ComboBoxItem Content="有道智云（即将支持）" Tag="youdao" IsEnabled="False" />
+                        </ComboBox>
 
                         <TextBlock Text="接口地址（OpenAI 兼容，填到 /v1 即可）"
                                    FontSize="12"
                                    Foreground="#4A4A52"
-                                   Margin="0,14,0,4" />
+                                   Margin="0,10,0,4" />
                         <TextBox x:Name="BaseUrlBox" Height="30" Padding="6,4" VerticalContentAlignment="Center" />
 
-                        <TextBlock Text="API Key（DPAPI 加密保存）"
+                        <TextBlock Text="API Key（DPAPI 加密保存；留空表示不修改）"
                                    FontSize="12"
                                    Foreground="#4A4A52"
-                                   Margin="0,12,0,4" />
+                                   Margin="0,10,0,4" />
                         <PasswordBox x:Name="ApiKeyBox" Height="30" Padding="6,4" VerticalContentAlignment="Center" />
 
                         <TextBlock Text="模型"
                                    FontSize="12"
                                    Foreground="#4A4A52"
-                                   Margin="0,12,0,4" />
-                        <TextBox x:Name="ModelBox" Height="30" Padding="6,4" VerticalContentAlignment="Center" />
+                                   Margin="0,10,0,4" />
+                        <TextBox x:Name="ModelBox" Height="30" Padding="6,4" VerticalContentAlignment="Center"
+                                 TextChanged="OnModelChanged" />
+
+                        <TextBlock Text="深度思考"
+                                   FontSize="12"
+                                   Foreground="#4A4A52"
+                                   Margin="0,10,0,4" />
+                        <ComboBox x:Name="ThinkingBox"
+                                  Height="30"
+                                  VerticalContentAlignment="Center"
+                                  SelectionChanged="OnThinkingChanged">
+                            <ComboBoxItem Content="默认（不指定，跟随服务商）" Tag="default" />
+                            <ComboBoxItem Content="否（关闭思考，翻译更快）" Tag="off" />
+                            <ComboBoxItem Content="是（开启思考）" Tag="on" />
+                        </ComboBox>
+                        <TextBlock x:Name="ThinkingInfoText"
+                                   FontSize="11"
+                                   Foreground="#8A8A92"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0" />
+                        <TextBlock x:Name="ThinkingHint"
+                                   FontSize="11"
+                                   Foreground="#2F6F3E"
+                                   TextWrapping="Wrap"
+                                   Margin="0,2,0,0"
+                                   Visibility="Collapsed" />
+
+                        <TextBlock Text="附加请求参数（JSON 对象，可选）"
+                                   FontSize="12"
+                                   Foreground="#4A4A52"
+                                   Margin="0,10,0,4" />
+                        <TextBox x:Name="ExtraBodyBox"
+                                 Height="52"
+                                 Padding="6,4"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto" />
+                        <TextBlock Text="会合并进请求体顶层。火山方舟关闭深度思考示例：{&quot;thinking&quot;:{&quot;type&quot;:&quot;disabled&quot;}}"
+                                   FontSize="11"
+                                   Foreground="#8A8A92"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0" />
 
                         <TextBlock Text="目标语言"
                                    FontSize="12"
                                    Foreground="#4A4A52"
-                                   Margin="0,12,0,4" />
+                                   Margin="0,10,0,4" />
                         <ComboBox x:Name="TargetBox" Height="30" VerticalContentAlignment="Center">
                             <ComboBoxItem Content="简体中文（zh-CN）" Tag="zh-CN" />
                             <ComboBoxItem Content="繁体中文（zh-TW）" Tag="zh-TW" />

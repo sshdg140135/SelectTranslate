@@ -11,4 +11,6 @@ public sealed record ApiSettings(
     string SystemPrompt,
     IReadOnlyDictionary<string, string> ExtraHeaders,
     bool Stream,
-    int? MaxTokens);
+    int? MaxTokens,
+    string ExtraBodyJson,
+    string ThinkingMode);

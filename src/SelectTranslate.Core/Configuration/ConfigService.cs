@@ -83,10 +83,14 @@ public sealed class ConfigService
         }
     }
 
-    public string? GetApiKey() => KeyProtector.Unprotect(Current.Api.ApiKeyProtected);
+    public string? GetApiKey() => GetApiKey(Current.ActiveProvider);
 
-    public void SetApiKey(string? plainText)
-        => Current.Api.ApiKeyProtected = KeyProtector.Protect(plainText);
+    public string? GetApiKey(ApiConfig provider) => KeyProtector.Unprotect(provider.ApiKeyProtected);
+
+    public void SetApiKey(string? plainText) => SetApiKey(Current.ActiveProvider, plainText);
+
+    public void SetApiKey(ApiConfig provider, string? plainText)
+        => provider.ApiKeyProtected = KeyProtector.Protect(plainText);
 
     private void BackupBrokenFile()
     {
